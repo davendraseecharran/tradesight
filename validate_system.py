@@ -1,10 +1,20 @@
+#!/usr/bin/env python3
 """
 TradeSight — System Validation (Pre-Flight Check)
 Runs all system checks without making AI calls.
+
+Usage:  .venv/bin/python validate_system.py
+   or:  source .venv/bin/activate && python validate_system.py
 """
 import asyncio
+import subprocess
 import sys
 import os
+
+# Auto-detect and relaunch with venv Python if running under system Python
+venv_python = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv", "bin", "python")
+if os.path.exists(venv_python) and sys.executable != os.path.realpath(venv_python):
+    os.execv(venv_python, [venv_python] + sys.argv)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
