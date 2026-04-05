@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -11,9 +13,13 @@ router = APIRouter(prefix="/api/v1/news", tags=["news"])
 
 
 @router.get("/calendar")
-def get_calendar(hours_ahead: int = 48, db: Session = Depends(get_db)):
-    """Return upcoming high-impact news events within the next N hours."""
-    events = get_upcoming_events(db, hours_ahead=hours_ahead)
+def get_calendar(
+    hours_ahead: int = 48,
+    impact: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Return upcoming news events within the next N hours. Optionally filter by impact level."""
+    events = get_upcoming_events(db, hours_ahead=hours_ahead, impact_filter=impact)
     return [_event_to_dict(e) for e in events]
 
 

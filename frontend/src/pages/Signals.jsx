@@ -16,7 +16,7 @@ export default function Signals() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Signals</h1>
-        <button onClick={refetch} className="btn-secondary text-xs">↻ Refresh</button>
+        <button onClick={refetch} className="btn-secondary text-xs">Refresh</button>
       </div>
 
       {/* Tabs */}
@@ -26,7 +26,7 @@ export default function Signals() {
             key={key}
             onClick={() => setTab(key)}
             className={`pb-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === key ? 'border-brand text-brand' : 'border-transparent text-text-muted hover:text-text-primary'
+              tab === key ? 'border-white text-white' : 'border-transparent text-text-muted hover:text-text-primary'
             }`}
           >
             {label}
@@ -40,9 +40,8 @@ export default function Signals() {
             <div className="space-y-3">{Array(2).fill(0).map((_, i) => <div key={i} className="skeleton h-40" />)}</div>
           ) : activeSignals.length === 0 ? (
             <div className="card text-center py-16 text-text-muted">
-              <p className="text-4xl mb-3">⚡</p>
               <p className="font-medium">No active signals</p>
-              <p className="text-sm mt-1">The screener runs every 4H. Use Charts → Analyze to trigger manually.</p>
+              <p className="text-sm mt-1">The screener runs every 4H. Use Charts &rarr; Analyze to trigger manually.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">

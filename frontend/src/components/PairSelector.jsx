@@ -5,7 +5,7 @@ export default function PairSelector({ value, onChange, className = '' }) {
     <select
       value={value}
       onChange={e => onChange(e.target.value)}
-      className={`bg-bg-card border border-bg-border text-text-primary text-sm rounded-md px-3 py-1.5 focus:outline-none focus:border-brand ${className}`}
+      className={`bg-bg-card border border-bg-border text-text-primary text-sm rounded-md px-3 py-1.5 focus:outline-none focus:border-neutral-500 ${className}`}
     >
       {PAIRS.map(p => (
         <option key={p} value={p}>{p.replace('_', '/')}</option>

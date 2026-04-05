@@ -90,7 +90,7 @@ export default function Charts() {
           <PairSelector value={pair} onChange={handlePairChange} />
           <TimeframeSelector value={timeframe} onChange={handleTfChange} />
           <button onClick={handleAnalyze} disabled={analyzing} className="btn-primary">
-            {analyzing ? 'Analyzing…' : '⚡ Analyze'}
+            {analyzing ? 'Analyzing…' : 'Analyze'}
           </button>
         </div>
       </div>

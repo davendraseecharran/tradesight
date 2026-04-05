@@ -76,10 +76,10 @@ export default function Backtest() {
               className="bg-bg-card border border-bg-border text-text-primary text-sm rounded-md px-3 py-1.5 w-20" />
           </div>
           <button onClick={runBacktest} disabled={loading} className="btn-primary">
-            {loading ? 'Running…' : '▶ Run Backtest'}
+            {loading ? 'Running…' : 'Run Backtest'}
           </button>
           <button onClick={runComparison} disabled={comparing} className="btn-secondary">
-            {comparing ? 'Comparing…' : '⊞ Compare All'}
+            {comparing ? 'Comparing…' : 'Compare All'}
           </button>
         </div>
       </div>

@@ -1,24 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+/* theme: black/white v2 */
 
 @layer base {
   body {
     @apply bg-bg-primary text-text-primary antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.01em;
   }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { @apply bg-bg-secondary; }
-  ::-webkit-scrollbar-thumb { @apply bg-bg-border rounded; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { @apply bg-transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-bg-border rounded-full; }
   ::-webkit-scrollbar-thumb:hover { @apply bg-muted; }
 }
 
 @layer components {
-  .card { @apply bg-bg-card border border-bg-border rounded-lg p-4; }
-  .btn-primary { @apply bg-brand hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed; }
-  .btn-secondary { @apply bg-bg-card hover:bg-bg-hover border border-bg-border text-text-primary px-4 py-2 rounded-md text-sm font-medium transition-colors; }
-  .badge-long { @apply bg-long/20 text-long text-xs font-semibold px-2 py-0.5 rounded; }
-  .badge-short { @apply bg-short/20 text-short text-xs font-semibold px-2 py-0.5 rounded; }
-  .label { @apply text-xs text-text-muted uppercase tracking-wider font-medium; }
+  .card { @apply bg-bg-card border border-bg-border rounded-md p-4; }
+  .btn-primary { @apply bg-white text-black hover:bg-neutral-200 px-4 py-2 rounded text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed; }
+  .btn-secondary { @apply bg-bg-card hover:bg-bg-hover border border-bg-border text-text-primary px-4 py-2 rounded text-sm font-medium transition-colors; }
+  .badge-long { @apply bg-long/15 text-long text-xs font-medium px-2 py-0.5 rounded; }
+  .badge-short { @apply bg-short/15 text-short text-xs font-medium px-2 py-0.5 rounded; }
+  .label { @apply text-[10px] text-text-muted uppercase tracking-widest font-medium; }
   .skeleton { @apply bg-bg-hover animate-pulse rounded; }
 }

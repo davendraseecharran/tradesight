@@ -32,6 +32,10 @@ export const ENDPOINTS = {
   refreshNews: `${API_BASE}/api/v1/news/refresh`,
   // Tokens
   tokenUsage: `${API_BASE}/api/v1/tokens/usage`,
+  // Settings
+  getConfig: `${API_BASE}/api/v1/settings/config`,
+  updateConfig: `${API_BASE}/api/v1/settings/config`,
+  testEmail: `${API_BASE}/api/v1/settings/test-email`,
   // Health
   health: `${API_BASE}/health`,
 }

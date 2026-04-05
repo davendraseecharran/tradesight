@@ -19,7 +19,7 @@ export default function NewsCalendar({ limit = 5, hours = 48 }) {
   )
 
   if (!events.length) return (
-    <p className="text-text-muted text-sm">No high-impact events in next {hours}h</p>
+    <p className="text-text-muted text-sm">No upcoming events in next {hours}h</p>
   )
 
   return (

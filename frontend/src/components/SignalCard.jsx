@@ -4,7 +4,7 @@ import { ENDPOINTS, apiFetch } from '../utils/api'
 
 function ConfidenceMeter({ score }) {
   const pct = (score / 10) * 100
-  const color = score >= 8 ? 'bg-long' : score >= 6 ? 'bg-brand' : 'bg-warn'
+  const color = score >= 8 ? 'bg-long' : score >= 6 ? 'bg-white' : 'bg-warn'
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-bg-border rounded-full overflow-hidden">
@@ -99,7 +99,7 @@ function ExecutionBadge({ status }) {
   if (!status) return null
   const styles = {
     pending_approval: 'bg-warn/10 text-warn',
-    approved: 'bg-brand/10 text-brand',
+    approved: 'bg-white/10 text-white',
     executed: 'bg-long/10 text-long',
     rejected: 'bg-short/10 text-short',
   }
