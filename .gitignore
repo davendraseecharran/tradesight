@@ -9,3 +9,8 @@ __pycache__/
 dist/
 build/
 .env
+.env
+logs/
+__pycache__/
+node_modules/
+*.db
