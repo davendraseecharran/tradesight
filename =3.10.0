@@ -1,0 +1,9 @@
+Collecting apscheduler
+  Downloading apscheduler-3.11.2-py3-none-any.whl (64 kB)
+Requirement already satisfied: pytz in ./.venv/lib/python3.9/site-packages (2026.1.post1)
+Collecting tzlocal>=3.0
+  Downloading tzlocal-5.3.1-py3-none-any.whl (18 kB)
+Installing collected packages: tzlocal, apscheduler
+Successfully installed apscheduler-3.11.2 tzlocal-5.3.1
+WARNING: You are using pip version 21.2.4; however, version 26.0.1 is available.
+You should consider upgrading via the '/Users/davendraseecharran/tradesight/.venv/bin/python3 -m pip install --upgrade pip' command.

@@ -1,0 +1,72 @@
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Resolve .env from project root (two levels up from this file)
+_ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=str(_ENV_FILE),
+        env_file_encoding="utf-8",
+    )
+
+    # OANDA
+    oanda_api_token: str
+    oanda_account_id: str
+    oanda_api_url: str = "https://api-fxpractice.oanda.com"
+
+    # Binance (optional for Phase 1)
+    binance_api_key: str = ""
+    binance_api_secret: str = ""
+    binance_base_url: str = "https://api.binance.us"
+
+    # Anthropic
+    anthropic_api_key: str
+
+    # Database
+    database_url: str = "sqlite:///./tradesight.db"
+
+    # Risk management
+    max_risk_per_trade: float = 0.02
+    daily_loss_limit: float = 0.05
+    max_open_positions: int = 3
+    min_risk_reward_ratio: float = 2.0
+    news_blackout_minutes: int = 30
+
+    # Email / SMTP
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    alert_email_to: str = ""
+
+    # Execution mode
+    execution_mode: str = "ALERT_ONLY"  # ALERT_ONLY | SEMI_AUTO | FULL_AUTO
+
+    # Token budgets
+    daily_token_budget_usd: float = 2.0
+    monthly_token_budget_usd: float = 20.0
+
+    # Agent thresholds
+    analyst_min_confidence: int = 6
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+# --- Constants ---
+
+FOREX_PAIRS = ["EUR_USD", "GBP_USD", "USD_JPY", "GBP_JPY", "AUD_USD", "USD_CAD"]
+CRYPTO_PAIRS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"]
+
+OANDA_GRANULARITIES = {"1H": "H1", "4H": "H4", "D": "D", "W": "W"}
+BINANCE_INTERVALS = {"1H": "1h", "4H": "4h", "D": "1d", "W": "1w"}
+
+TIMEFRAMES = ["1H", "4H", "D", "W"]
