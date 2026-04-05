@@ -32,12 +32,12 @@ export default function TokenUsage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Token Usage</h1>
-        <button onClick={refetch} className="btn-secondary text-xs">↻ Refresh</button>
+        <button onClick={refetch} className="btn-secondary text-xs">Refresh</button>
       </div>
 
       {(dailyAlert || monthlyAlert) && (
         <div className="bg-short/10 border border-short/30 text-short text-sm px-4 py-3 rounded-md">
-          ⚠ Budget exceeded: {[dailyAlert && 'daily', monthlyAlert && 'monthly'].filter(Boolean).join(' & ')} limit reached.
+          Budget exceeded: {[dailyAlert && 'daily', monthlyAlert && 'monthly'].filter(Boolean).join(' & ')} limit reached.
         </div>
       )}
 

@@ -92,16 +92,37 @@ def _nth_weekday(year: int, month: int, weekday: int, n: int) -> datetime:
     return first + timedelta(days=day_offset + (n - 1) * 7)
 
 
+def _classify_impact(raw_impact: str) -> str | None:
+    """Normalize FF impact string to high/medium/low or None if unrecognized."""
+    val = raw_impact.lower().strip()
+    if "high" in val:
+        return "high"
+    if "medium" in val or "moderate" in val:
+        return "medium"
+    if "low" in val:
+        return "low"
+    return None
+
+
+# Blackout windows by impact level (only high gets a real blackout)
+_BLACKOUT_MINUTES = {"high": 30, "medium": 0, "low": 0}
+
+
 def _parse_ff_events(raw_events: list[dict]) -> list[dict]:
-    """Filter and parse ForexFactory events in pure Python (no AI needed)."""
+    """Filter and parse ForexFactory events in pure Python (no AI needed).
+
+    Stores high, medium, and low impact events. Only high-impact events
+    get blackout windows that block trading.
+    """
     parsed = []
     for ev in raw_events:
         currency = (ev.get("country") or ev.get("currency") or "").upper()
         if currency not in TRACKED_CURRENCIES:
             continue
 
-        impact = (ev.get("impact") or ev.get("impactTitle") or "").lower()
-        if "high" not in impact:
+        raw_impact = (ev.get("impact") or ev.get("impactTitle") or "").lower()
+        impact = _classify_impact(raw_impact)
+        if impact is None:
             continue
 
         title = ev.get("title") or ev.get("event") or "Unknown Event"
@@ -112,13 +133,14 @@ def _parse_ff_events(raw_events: list[dict]) -> list[dict]:
         if event_dt is None:
             continue
 
+        blackout_mins = _BLACKOUT_MINUTES[impact]
         parsed.append({
             "event": title,
             "currency": currency,
-            "impact": "high",
+            "impact": impact,
             "event_datetime": event_dt.isoformat(),
-            "blackout_start": (event_dt - timedelta(minutes=30)).isoformat(),
-            "blackout_end": (event_dt + timedelta(minutes=30)).isoformat(),
+            "blackout_start": (event_dt - timedelta(minutes=blackout_mins)).isoformat(),
+            "blackout_end": (event_dt + timedelta(minutes=blackout_mins)).isoformat(),
         })
 
     return parsed
@@ -176,12 +198,12 @@ async def run_news_sentinel(db: Session) -> dict:
 
     parsed_events = _parse_ff_events(raw_events)
     count = _upsert_events(db, parsed_events)
-    logger.info("News Sentinel: stored %d high-impact events from %d raw", count, len(raw_events))
+    logger.info("News Sentinel: stored %d events from %d raw", count, len(raw_events))
 
     return {
         "status": "ok",
         "raw_events_fetched": len(raw_events),
-        "high_impact_parsed": len(parsed_events),
+        "events_parsed": len(parsed_events),
         "events_stored": count,
     }
 
@@ -208,19 +230,26 @@ def get_active_blackouts(db: Session, instrument: str) -> list[NewsEvent]:
     )
 
 
-def get_upcoming_events(db: Session, hours_ahead: int = 168) -> list[NewsEvent]:
-    """Return high-impact events within a time window (past week + hours_ahead into future)."""
+def get_upcoming_events(
+    db: Session,
+    hours_ahead: int = 168,
+    impact_filter: str | None = None,
+) -> list[NewsEvent]:
+    """Return events within a time window (past week + hours_ahead into future).
+
+    Args:
+        impact_filter: If set, only return events with this impact level (high/medium/low).
+                       If None, return all impact levels.
+    """
     now = datetime.now(timezone.utc)
     lookback = now - timedelta(days=7)
     cutoff = now + timedelta(hours=hours_ahead)
 
-    return (
-        db.query(NewsEvent)
-        .filter(
-            NewsEvent.impact == "high",
-            NewsEvent.event_datetime >= lookback,
-            NewsEvent.event_datetime <= cutoff,
-        )
-        .order_by(NewsEvent.event_datetime)
-        .all()
+    q = db.query(NewsEvent).filter(
+        NewsEvent.event_datetime >= lookback,
+        NewsEvent.event_datetime <= cutoff,
     )
+    if impact_filter:
+        q = q.filter(NewsEvent.impact == impact_filter)
+
+    return q.order_by(NewsEvent.event_datetime).all()

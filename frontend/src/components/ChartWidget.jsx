@@ -109,7 +109,7 @@ export default function ChartWidget({ pair, timeframe, height = 400, signalLevel
 
     if (!signalLevels) return
     const lines = [
-      { price: signalLevels.entry_price, color: '#2962ff', title: 'Entry', style: 0 },
+      { price: signalLevels.entry_price, color: '#ffffff', title: 'Entry', style: 0 },
       { price: signalLevels.stop_loss, color: '#ef5350', title: 'SL', style: 2 },
       { price: signalLevels.take_profit_1, color: '#26a69a', title: 'TP1', style: 2 },
       signalLevels.take_profit_2 && { price: signalLevels.take_profit_2, color: '#26a69a', title: 'TP2', style: 2 },

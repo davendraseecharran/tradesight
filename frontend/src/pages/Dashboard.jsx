@@ -37,7 +37,7 @@ export default function Dashboard() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-text-primary">Dashboard</h1>
-        <Link to="/signals" className="text-xs text-brand hover:underline">View all signals →</Link>
+        <Link to="/signals" className="text-xs text-text-secondary hover:text-white hover:underline">View all signals →</Link>
       </div>
 
       {/* Metric cards */}
@@ -57,7 +57,7 @@ export default function Dashboard() {
         <MetricCard
           label="Active Trades"
           value={tradesLoading ? '—' : openTradeCount.toString()}
-          sub={<Link to="/portfolio" className="text-brand hover:underline">View →</Link>}
+          sub={<Link to="/portfolio" className="text-text-secondary hover:text-white hover:underline">View →</Link>}
           loading={tradesLoading}
         />
         <MetricCard
@@ -108,7 +108,7 @@ export default function Dashboard() {
             <div className="card">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-medium text-text-primary">Open Positions</h2>
-                <Link to="/portfolio" className="text-xs text-brand hover:underline">Details →</Link>
+                <Link to="/portfolio" className="text-xs text-text-secondary hover:text-white hover:underline">Details →</Link>
               </div>
               <div className="space-y-2">
                 {openTrades.slice(0, 4).map(t => {
@@ -136,7 +136,7 @@ export default function Dashboard() {
           <div className="card">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-medium text-text-primary">Upcoming News</h2>
-              <Link to="/news" className="text-xs text-brand hover:underline">All →</Link>
+              <Link to="/news" className="text-xs text-text-secondary hover:text-white hover:underline">All →</Link>
             </div>
             <NewsCalendar limit={3} hours={24} />
           </div>

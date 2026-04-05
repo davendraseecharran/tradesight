@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.database import init_db
 from backend.app.routers import analysis, backtest, market_data, risk
 from backend.app.routers import signals, tokens, news, account, chart_data, trades
+from backend.app.routers import settings as settings_router
 from backend.app.scheduler import create_scheduler
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,7 @@ app.include_router(chart_data.router)
 
 # Phase 5 routers
 app.include_router(trades.router)
+app.include_router(settings_router.router)
 
 
 @app.get("/health")

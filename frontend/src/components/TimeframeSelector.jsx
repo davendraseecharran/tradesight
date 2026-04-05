@@ -9,7 +9,7 @@ export default function TimeframeSelector({ value, onChange }) {
           onClick={() => onChange(tf)}
           className={`px-3 py-1.5 text-sm font-medium transition-colors ${
             value === tf
-              ? 'bg-brand text-white'
+              ? 'bg-white text-black'
               : 'bg-bg-card text-text-secondary hover:bg-bg-hover hover:text-text-primary'
           }`}
         >
