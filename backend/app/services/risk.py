@@ -44,8 +44,8 @@ class RiskManager:
         """Return True if within the daily loss limit."""
         today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         daily_loss = (
-            self._db.query(func.sum(Trade.pnl))
-            .filter(Trade.closed_at >= today_start, Trade.pnl < 0)
+            self._db.query(func.sum(Trade.actual_pnl))
+            .filter(Trade.closed_at >= today_start, Trade.actual_pnl < 0)
             .scalar()
         ) or 0.0
         max_loss = starting_balance * self._s.daily_loss_limit
