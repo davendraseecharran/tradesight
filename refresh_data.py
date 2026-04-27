@@ -10,7 +10,7 @@ import os
 
 # Auto-detect and relaunch with venv Python if running under system Python
 venv_python = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv", "bin", "python")
-if os.path.exists(venv_python) and sys.executable != os.path.realpath(venv_python):
+if os.path.exists(venv_python) and os.path.realpath(sys.executable) != os.path.realpath(venv_python):
     os.execv(venv_python, [venv_python] + sys.argv)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

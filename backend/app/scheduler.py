@@ -8,6 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from backend.app.agents.news_sentinel import run_news_sentinel
 from backend.app.agents.orchestrator import run_pipeline
+from backend.app.config import FOREX_PAIRS, TIMEFRAMES
 from backend.app.database import SessionLocal
 from backend.app.services.trade_manager import TradeManager
 
@@ -64,11 +65,46 @@ def get_market_status() -> dict:
 
 # ── Scheduled jobs ─────────────────────────────────────────────────────────────
 
+async def job_refresh_candles():
+    """Refresh candle data from OANDA for all pairs and timeframes.
+
+    Must run BEFORE the pipeline so the AI analyzes current prices.
+    """
+    if not is_market_open():
+        return
+
+    from backend.app.routers.market_data import _fetch_candles, _store_candles
+
+    logger.info("Scheduler: refreshing candle data from OANDA...")
+    db = SessionLocal()
+    total = 0
+    try:
+        for pair in FOREX_PAIRS:
+            for tf in TIMEFRAMES:
+                try:
+                    raw = await _fetch_candles("oanda", pair, tf, 200)
+                    _store_candles(db, raw, pair, "oanda", tf)
+                    total += len(raw)
+                except Exception as exc:
+                    logger.warning("Scheduler: candle fetch failed %s %s: %s", pair, tf, exc)
+        logger.info("Scheduler: candle refresh complete — %d candles upserted", total)
+    except Exception as exc:
+        logger.error("Scheduler: candle refresh job failed: %s", exc)
+    finally:
+        db.close()
+
+
 async def job_run_pipeline():
-    """Main 4-agent pipeline job — runs every 4 hours during market hours."""
+    """Main 4-agent pipeline job — runs every 4 hours during market hours.
+
+    Refreshes candle data first to ensure the AI analyzes current prices.
+    """
     if not is_market_open():
         logger.info("Scheduler: market closed, skipping pipeline run")
         return
+
+    # Refresh candle data BEFORE running the pipeline
+    await job_refresh_candles()
 
     logger.info("Scheduler: starting scheduled pipeline run...")
     db = SessionLocal()
@@ -174,6 +210,17 @@ def create_scheduler() -> AsyncIOScheduler:
         name="News Sentinel (Afternoon)",
         replace_existing=True,
         misfire_grace_time=600,
+    )
+
+    # Candle data refresh every hour (keeps charts current between pipeline runs)
+    scheduler.add_job(
+        job_refresh_candles,
+        trigger="interval",
+        minutes=60,
+        id="candle_refresh",
+        name="Candle Data Refresh",
+        replace_existing=True,
+        misfire_grace_time=120,
     )
 
     # Trade lifecycle manager every 5 minutes
