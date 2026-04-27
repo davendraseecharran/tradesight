@@ -87,11 +87,13 @@ async def update_config(body: ConfigUpdate):
 
     _ENV_FILE.write_text("\n".join(lines) + "\n")
 
-    # Clear config cache so next request picks up changes
+    # Clear the lru_cache. The next get_settings() call rebuilds the Settings
+    # object from the freshly-written .env. Scheduled jobs call get_settings()
+    # on each run, so changes are picked up without a server restart.
     get_settings.cache_clear()
 
     return {"status": "ok", "updated": list(body.updates.keys()),
-            "note": "Server restart required for changes to take full effect"}
+            "note": "Changes are live — applied on the next scheduled run."}
 
 
 @router.post("/test-email")
