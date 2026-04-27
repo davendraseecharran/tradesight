@@ -31,11 +31,14 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "sqlite:///./tradesight.db"
 
-    # Risk management
-    max_risk_per_trade: float = 0.02
-    daily_loss_limit: float = 0.05
-    max_open_positions: int = 3
-    min_risk_reward_ratio: float = 2.0
+    # Risk management — calibrated for both $1K real and $100K paper accounts.
+    # Position size is computed dynamically as: balance × max_risk_per_trade ÷
+    # stop distance, then clamped to a per-account lot ceiling in
+    # risk_manager_agent.py. R:R 2.5 and confidence 7 keep quality high.
+    max_risk_per_trade: float = 0.02       # 2% of balance per trade
+    daily_loss_limit: float = 0.03         # tightened from 5% — circuit breaker
+    max_open_positions: int = 2            # quality over quantity
+    min_risk_reward_ratio: float = 2.5     # raised from 2.0
     news_blackout_minutes: int = 30
 
     # Email / SMTP
@@ -52,8 +55,10 @@ class Settings(BaseSettings):
     daily_token_budget_usd: float = 2.0
     monthly_token_budget_usd: float = 20.0
 
-    # Agent thresholds
-    analyst_min_confidence: int = 6
+    # Agent thresholds — confidence 7+ only ("Weekly + Daily aligned, good
+    # SMC confluence, clean entry"). Lower than 7 = "mixed signals" per the
+    # analyst's own scoring rubric and is rejected.
+    analyst_min_confidence: int = 7
 
 
 @lru_cache

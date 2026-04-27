@@ -155,6 +155,9 @@ async def _auto_execute(db: Session, signal: Signal, settings) -> bool:
     """Execute a trade automatically in FULL_AUTO mode. Returns True on success."""
     from backend.app.services.trade_manager import execute_signal_trade
 
+    # Defense-in-depth: even if the analyst min confidence is dropped, never
+    # auto-execute below 7. Risk filters (R:R, daily loss, max positions) are
+    # applied separately by the risk manager.
     if signal.confidence < 7:
         logger.info("Orchestrator: FULL_AUTO skipped — confidence %d < 7", signal.confidence)
         signal.execution_status = None
