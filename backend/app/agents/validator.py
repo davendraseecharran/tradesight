@@ -163,7 +163,11 @@ async def run_validator(
         verdict = {"approve": False, "confidence": 0,
                    "reasoning": f"Validator output unparseable: {raw[:200]}"}
 
-    approve = bool(verdict.get("approve")) and int(verdict.get("confidence", 0)) >= 7
+    # Threshold comes from ANALYST_MIN_CONFIDENCE (.env), default 7
+    approve = (
+        bool(verdict.get("approve"))
+        and int(verdict.get("confidence", 0)) >= settings.analyst_min_confidence
+    )
 
     result = dict(setup)
     result["validator_approve"] = approve

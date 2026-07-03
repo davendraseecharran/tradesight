@@ -173,7 +173,6 @@ async def _auto_execute(db: Session, signal: Signal, settings) -> bool:
     except Exception as exc:
         logger.error("Orchestrator: FULL_AUTO execution failed for signal %d: %s", signal.id, exc)
         signal.execution_status = "execution_failed"
-        signal.notes = str(exc) if hasattr(signal, "notes") else None
         db.commit()
         return False
 
