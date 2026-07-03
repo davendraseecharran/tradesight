@@ -31,11 +31,11 @@ Main chat is the hub; this file is the durable state.
 | # | Phase | Status | Notes |
 |---|-------|--------|-------|
 | 1 | Mechanical strategy engine (`backend/app/services/strategy/`) + tests | DONE | structure.py, aoi.py, patterns.py, engine.py; test_strategy.py 32/32 |
-| 2 | Backtest (free, no AI) — HARD GATE | IN PROGRESS | 24mo iter1: 90 trades PF 1.08; fixes (zone-hold, SL sanity, ATR buffer); 48mo sweep running. XAU strongest (PF 1.67, N=34 loose) |
+| 2 | Backtest (free, no AI) — HARD GATE | DONE — PASS | 48mo, sl_atr_fraction=0.20: 29 trades, 31% win, +$13,956, PF 1.35. Sweep monotonic + all-positive (0.05→0.20: PF 1.11→1.35) = robust. Watch-list: GBP_JPY (0/4, -$7.8K in every config) and XAU_USD (PF 0.71 at this setting) |
 | 3 | Reliability fixes | DONE | watchdog rewritten (health-check restart), install_watchdog.sh (one command, + keep-awake agent), --reload removed, system_status.py job tracking + failure emails, /health shows problems |
 | 4 | Engine-first pipeline | DONE | scan_setups() free; validator.py (compact Sonnet second-opinion, ~$0.01-0.03/call); VALIDATOR_MODE=required/optional/off; old screener.py+analyst.py deleted; pipeline cron moved to H4 closes (1,5,9,13,17,21 UTC +5min) |
 | 5 | Report button | DONE | diagnostics.py build_report(); GET /api/v1/report/export?days=N; Download Report button on Dashboard (verified in browser) |
-| 6 | Review pass, readiness report, deployment-Mac reload instructions | TODO | blocked on Phase 2 verdict; then user funds API ($10-20) and deploys |
+| 6 | Review pass, readiness report, deployment-Mac reload instructions | DONE | code-review subagent: no money-path bugs; DEPLOYMENT.md written; readiness report delivered 2026-07-03. Next: user funds API ($10-20), follows DEPLOYMENT.md |
 
 ## Known bugs (evidence gathered 2026-07-03)
 1. Prompt caching: 95 AI calls, 0 cache hits — analyst system prompt ~1,233

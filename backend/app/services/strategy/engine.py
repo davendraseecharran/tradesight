@@ -39,7 +39,7 @@ TF_DURATION = {
 DEFAULTS = {
     "swing_k": 2,             # pivot confirmation bars
     "sl_buffer_pips": 7.0,    # 5-10 pips beyond the AOI ("if hit, you are wrong")
-    "sl_atr_fraction": 0.15,  # volatility floor for the SL buffer
+    "sl_atr_fraction": 0.20,  # volatility floor for the SL buffer (48-month sweep: PF rises monotonically 0.05→0.20; 0.20 = PF 1.35)
     "min_rr": 2.0,            # minimum 1:2 risk/reward, always
     "min_touches": 3,         # no 3 touches, no AOI
 }
