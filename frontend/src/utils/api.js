@@ -38,6 +38,8 @@ export const ENDPOINTS = {
   testEmail: `${API_BASE}/api/v1/settings/test-email`,
   // Health
   health: `${API_BASE}/health`,
+  // Diagnostic report download (days=0 → all history)
+  reportExport: (days = 7) => `${API_BASE}/api/v1/report/export?days=${days}`,
 }
 
 export async function apiFetch(url, options = {}) {

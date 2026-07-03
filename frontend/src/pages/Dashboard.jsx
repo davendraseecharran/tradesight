@@ -37,7 +37,17 @@ export default function Dashboard() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-text-primary">Dashboard</h1>
-        <Link to="/signals" className="text-xs text-text-secondary hover:text-white hover:underline">View all signals →</Link>
+        <div className="flex items-center gap-4">
+          <a
+            href={ENDPOINTS.reportExport(7)}
+            download
+            className="text-xs border border-neutral-700 rounded px-3 py-1.5 text-text-secondary hover:text-white hover:border-neutral-500"
+            title="Download the last 7 days of signals, trades, P&L, job health, and error logs as one JSON file — upload it to Claude for a weekly review"
+          >
+            Download Report
+          </a>
+          <Link to="/signals" className="text-xs text-text-secondary hover:text-white hover:underline">View all signals →</Link>
+        </div>
       </div>
 
       {/* Metric cards */}

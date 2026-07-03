@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.database import init_db
 from backend.app.routers import analysis, backtest, market_data, risk
 from backend.app.routers import signals, tokens, news, account, chart_data, trades
+from backend.app.routers import report_export
 from backend.app.routers import settings as settings_router
 from backend.app.scheduler import create_scheduler
 
@@ -68,16 +69,21 @@ app.include_router(chart_data.router)
 # Phase 5 routers
 app.include_router(trades.router)
 app.include_router(settings_router.router)
+app.include_router(report_export.router)
 
 
 @app.get("/health")
 def health():
     from backend.app.scheduler import get_market_status
+    from backend.app.services.system_status import health_snapshot
     market = get_market_status()
+    snapshot = health_snapshot()
     return {
-        "status": "ok",
-        "version": "0.5.0",
+        "status": "ok" if snapshot["ok"] else "degraded",
+        "version": "0.6.0",
         "market_open": market["is_open"],
         "market_time_et": market["current_time_et"],
         "scheduler_running": _scheduler.running if _scheduler else False,
+        "problems": snapshot["problems"],
+        "jobs": snapshot["jobs"],
     }

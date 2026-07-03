@@ -33,12 +33,13 @@ async def fetch_historical_candles(
 
     try:
         while chunk_start < now:
+            # from + count pagination: OANDA rejects from/to ranges implying
+            # more than 5000 candles, so never send `to` here.
             candles = await client.get_candles(
                 instrument=instrument,
                 granularity=oanda_gran,
                 count=5000,
                 from_time=chunk_start.isoformat(),
-                to_time=now.isoformat(),
             )
             if not candles:
                 break

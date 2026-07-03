@@ -11,9 +11,11 @@ from backend.app.models.trade import Trade
 
 
 def _get_pip_size(instrument: str) -> float:
-    """Return pip size for an instrument. JPY pairs use 0.01, others 0.0001."""
+    """Return pip size: JPY pairs 0.01, gold (XAU) 0.1, others 0.0001."""
     if "JPY" in instrument:
         return 0.01
+    if instrument.startswith("XAU"):
+        return 0.1
     return 0.0001
 
 

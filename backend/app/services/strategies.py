@@ -29,6 +29,8 @@ MTFStrategyFn = Callable[[Dict[str, pd.DataFrame], int, dict], Optional[Signal]]
 def _get_pip_size(instrument: str) -> float:
     if "JPY" in instrument:
         return 0.01
+    if instrument.startswith("XAU"):
+        return 0.1
     return 0.0001
 
 

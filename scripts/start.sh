@@ -14,9 +14,10 @@ elif [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
 fi
 
-# Start backend
+# Start backend (no --reload: dev-mode file watching is unstable for a
+# long-running production server)
 echo "[1/2] Starting backend (port 8000)..."
-nohup python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload \
+nohup python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 \
     > /tmp/tradesight-backend.log 2>&1 &
 echo $! > /tmp/tradesight-backend.pid
 echo "  Backend PID: $(cat /tmp/tradesight-backend.pid)"

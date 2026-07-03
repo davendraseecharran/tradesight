@@ -16,12 +16,15 @@ SPREADS_PIPS: dict[str, float] = {
     "GBP_JPY": 2.5,
     "AUD_USD": 1.4,
     "USD_CAD": 1.6,
+    "XAU_USD": 4.0,   # ~$0.40 spread, pip = 0.1
 }
 
 
 def _get_pip_size(instrument: str) -> float:
     if "JPY" in instrument:
         return 0.01
+    if instrument.startswith("XAU"):
+        return 0.1
     return 0.0001
 
 
@@ -57,6 +60,9 @@ class BacktestConfig:
     risk_percent: float = 0.02
     min_rr_ratio: float = 2.0
     warmup_bars: int = 200
+    # When True, keep the strategy's take-profit (e.g. structure-based
+    # targets) instead of recomputing TP as exactly min_rr_ratio x risk.
+    respect_signal_tp: bool = False
 
 
 @dataclass
@@ -198,11 +204,13 @@ class BacktestEngine:
         if risk == 0:
             return
 
-        # Recalculate TP from spread-adjusted entry to guarantee target R:R
-        if signal.direction == Direction.LONG:
-            tp = entry + risk * self.config.min_rr_ratio
-        else:
-            tp = entry - risk * self.config.min_rr_ratio
+        # Recalculate TP from spread-adjusted entry to guarantee target R:R,
+        # unless the strategy sets structure-based targets it wants kept.
+        if not self.config.respect_signal_tp:
+            if signal.direction == Direction.LONG:
+                tp = entry + risk * self.config.min_rr_ratio
+            else:
+                tp = entry - risk * self.config.min_rr_ratio
 
         # Position sizing: risk_amount / distance
         position_size = (self.balance * self.config.risk_percent) / risk

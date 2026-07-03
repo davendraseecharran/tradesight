@@ -10,6 +10,7 @@ from backend.app.agents.news_sentinel import run_news_sentinel
 from backend.app.agents.orchestrator import run_pipeline
 from backend.app.config import FOREX_PAIRS, TIMEFRAMES
 from backend.app.database import SessionLocal
+from backend.app.services.system_status import record_failure, record_success
 from backend.app.services.trade_manager import TradeManager
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ async def job_refresh_candles():
     logger.info("Scheduler: refreshing candle data from OANDA...")
     db = SessionLocal()
     total = 0
+    failed = 0
     try:
         for pair in FOREX_PAIRS:
             for tf in TIMEFRAMES:
@@ -86,10 +88,16 @@ async def job_refresh_candles():
                     _store_candles(db, raw, pair, "oanda", tf)
                     total += len(raw)
                 except Exception as exc:
+                    failed += 1
                     logger.warning("Scheduler: candle fetch failed %s %s: %s", pair, tf, exc)
         logger.info("Scheduler: candle refresh complete — %d candles upserted", total)
+        if total > 0:
+            record_success("candle_refresh", f"{total} candles upserted, {failed} fetch failures")
+        else:
+            record_failure("candle_refresh", f"0 candles fetched ({failed} failures)")
     except Exception as exc:
         logger.error("Scheduler: candle refresh job failed: %s", exc)
+        record_failure("candle_refresh", str(exc))
     finally:
         db.close()
 
@@ -115,8 +123,19 @@ async def job_run_pipeline():
             result.get("signals_generated", 0),
             result.get("signals_approved", 0),
         )
+        errors = result.get("errors") or []
+        if errors and result.get("pairs_screened", 0) == 0:
+            # Errors AND nothing screened = the run accomplished nothing
+            record_failure("pipeline", "; ".join(str(e) for e in errors)[:500])
+        else:
+            record_success(
+                "pipeline",
+                f"{result.get('signals_generated', 0)} signals, "
+                f"{result.get('signals_approved', 0)} approved",
+            )
     except Exception as exc:
         logger.error("Scheduler: pipeline job failed: %s", exc)
+        record_failure("pipeline", str(exc))
     finally:
         db.close()
 
@@ -174,14 +193,17 @@ def create_scheduler() -> AsyncIOScheduler:
     """
     scheduler = AsyncIOScheduler(timezone=pytz.utc)
 
-    # Screener + analyst pipeline every 4 hours (on the hour, UTC)
+    # Engine + validator pipeline every 4 hours, 5 minutes AFTER the OANDA
+    # H4 candles close (candles are aligned to 17:00 New York = 21:00/22:00
+    # UTC, so closes land at 1,5,9,13,17,21 UTC). The strategy enters on
+    # confirmation-candle CLOSE, so running mid-candle would be pointless.
     scheduler.add_job(
         job_run_pipeline,
         trigger="cron",
-        hour="0,4,8,12,16,20",
-        minute=0,
+        hour="1,5,9,13,17,21",
+        minute=5,
         id="pipeline",
-        name="4-Agent Pipeline",
+        name="Engine + Validator Pipeline",
         replace_existing=True,
         misfire_grace_time=300,  # 5 minute grace period
     )

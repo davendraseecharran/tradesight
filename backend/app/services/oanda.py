@@ -55,8 +55,13 @@ class OandaClient:
             "price": "M",
         }
         if from_time and to_time:
+            # OANDA caps the implied candle count of a from/to range at 5000
             params["from"] = from_time
             params["to"] = to_time
+        elif from_time:
+            # from + count paginates safely regardless of range size
+            params["from"] = from_time
+            params["count"] = min(count, 5000)
         else:
             params["count"] = min(count, 5000)
 

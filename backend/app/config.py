@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     # analyst's own scoring rubric and is rejected.
     analyst_min_confidence: int = 7
 
+    # Validator mode: "required" = no Claude validation, no trade (safest);
+    # "optional" = trade mechanically if the validator is unavailable;
+    # "off" = pure mechanical engine, zero AI calls in the trade path.
+    validator_mode: str = "required"
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -68,7 +73,7 @@ def get_settings() -> Settings:
 
 # --- Constants ---
 
-FOREX_PAIRS = ["EUR_USD", "GBP_USD", "USD_JPY", "GBP_JPY", "AUD_USD", "USD_CAD"]
+FOREX_PAIRS = ["EUR_USD", "GBP_USD", "USD_JPY", "GBP_JPY", "AUD_USD", "USD_CAD", "XAU_USD"]
 CRYPTO_PAIRS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT"]
 
 OANDA_GRANULARITIES = {"1H": "H1", "4H": "H4", "D": "D", "W": "W"}

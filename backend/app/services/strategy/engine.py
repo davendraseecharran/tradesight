@@ -21,7 +21,7 @@ from typing import Dict, Optional
 import pandas as pd
 
 from backend.app.services.strategies import Direction, Signal
-from backend.app.services.strategy.aoi import AOI, find_aois, nearest_aoi
+from backend.app.services.strategy.aoi import AOI, _atr as _aoi_atr, find_aois, nearest_aoi
 from backend.app.services.strategy.patterns import bearish_confirmation, bullish_confirmation
 from backend.app.services.strategy.structure import (
     StructureState,
@@ -39,6 +39,7 @@ TF_DURATION = {
 DEFAULTS = {
     "swing_k": 2,             # pivot confirmation bars
     "sl_buffer_pips": 7.0,    # 5-10 pips beyond the AOI ("if hit, you are wrong")
+    "sl_atr_fraction": 0.15,  # volatility floor for the SL buffer
     "min_rr": 2.0,            # minimum 1:2 risk/reward, always
     "min_touches": 3,         # no 3 touches, no AOI
 }
@@ -59,7 +60,11 @@ def get_pip_size(instrument: str) -> float:
 _structure_cache: dict[tuple, StructureState] = {}
 
 
-def _cached_structure(df: pd.DataFrame, k: int, upto: Optional[int]) -> StructureState:
+def _cached_structure(
+    df: pd.DataFrame, k: int, upto: Optional[int], cache: bool = True
+) -> StructureState:
+    if not cache:
+        return analyze_structure(df, k=k, upto=upto)
     end = upto if upto is not None else len(df)
     key = (
         len(df),
@@ -126,7 +131,9 @@ def evaluate_setup(
     # ── Step 2: AOI on the 4H, inside the 4H structure range ─────────────────
     h4 = dataframes["H4"]
     h4_end = upto["H4"]
-    h4_state = _cached_structure(h4, k, h4_end)
+    # H4 upto advances every evaluation, so each state is used exactly once —
+    # caching it would only evict the hot Daily/Weekly entries.
+    h4_state = _cached_structure(h4, k, h4_end, cache=False)
     if h4_state.trend is None:
         return None
 
@@ -139,6 +146,17 @@ def evaluate_setup(
     if aoi is None or not aoi.candle_at_or_inside(float(last["high"]), float(last["low"])):
         return None  # not at the area of interest — no entry, ever
 
+    # AOI must be HOLDING at entry: the confirmation candle itself must close
+    # back inside/beyond the zone on the trade side. Earlier wick-throughs are
+    # allowed (a sweep-and-reclaim is a strong entry), but entering while the
+    # close is still beyond the zone means the area is broken — "wait for the
+    # next one".
+    last_close = float(last["close"])
+    if direction == "bullish" and last_close < aoi.bottom:
+        return None
+    if direction == "bearish" and last_close > aoi.top:
+        return None
+
     # ── Step 3: Confirmation candle at the AOI, in the top-down direction ─────
     idx = h4_end - 1
     if direction == "bullish":
@@ -149,8 +167,11 @@ def evaluate_setup(
         return None
 
     # ── Risk levels ───────────────────────────────────────────────────────────
+    # SL buffer: at least 5-10 pips beyond the AOI, but scaled up to a
+    # fraction of ATR on volatile instruments so the stop sits outside noise.
     pip = get_pip_size(instrument)
-    buffer = p["sl_buffer_pips"] * pip
+    atr = _aoi_atr(h4, upto=h4_end)
+    buffer = max(p["sl_buffer_pips"] * pip, atr * p["sl_atr_fraction"])
     entry = float(last["close"])
 
     if direction == "bullish":
@@ -165,6 +186,13 @@ def evaluate_setup(
             target = nearest_structure_target(d_state, entry, "bearish")
 
     if target is None:
+        return None
+
+    # Structural sanity: SL must be on the losing side of entry. If not, the
+    # confirmation candle closed beyond the zone and the setup is invalid.
+    if direction == "bullish" and entry <= stop_loss:
+        return None
+    if direction == "bearish" and entry >= stop_loss:
         return None
 
     risk = abs(entry - stop_loss)

@@ -9,11 +9,13 @@ from email.mime.text import MIMEText
 
 from sqlalchemy.orm import Session
 
-from backend.app.agents.analyst import run_analyst
 from backend.app.agents.risk_manager_agent import run_risk_manager
-from backend.app.agents.screener import run_screener
-from backend.app.config import get_settings
+from backend.app.agents.validator import run_validator
+from backend.app.config import FOREX_PAIRS, get_settings
 from backend.app.models.signal import Signal
+from backend.app.services.historical import load_candles_as_dataframe
+from backend.app.services.indicators import compute_indicators
+from backend.app.services.strategy import evaluate_setup
 
 logger = logging.getLogger(__name__)
 
@@ -176,17 +178,67 @@ async def _auto_execute(db: Session, signal: Signal, settings) -> bool:
         return False
 
 
+# ── Engine scan (pure Python, zero AI cost) ───────────────────────────────────
+
+def _current_session() -> str:
+    hour = datetime.now(timezone.utc).hour
+    if 7 <= hour < 12:
+        return "London"
+    if 12 <= hour < 16:
+        return "London/NY overlap"
+    if 16 <= hour < 21:
+        return "New York"
+    return "Asia"
+
+
+def _load_frames(db: Session, instrument: str) -> dict:
+    """Load the timeframes the engine needs from the local candle store."""
+    frames = {}
+    for gran in ("W", "D", "H4"):
+        df = load_candles_as_dataframe(db, instrument, gran)
+        if df is not None and len(df):
+            frames[gran] = df
+    return frames
+
+
+def scan_setups(db: Session) -> list[dict]:
+    """Run the mechanical 3-step engine over all pairs. Free, deterministic."""
+    candidates = []
+    for pair in FOREX_PAIRS:
+        try:
+            frames = _load_frames(db, pair)
+            setup = evaluate_setup(frames, pair)
+            if setup:
+                candidates.append(setup)
+                logger.info("Engine: candidate %s %s — %s",
+                            pair, setup["direction"], setup["reason"])
+        except Exception as exc:
+            logger.error("Engine: scan failed for %s: %s", pair, exc)
+    return candidates
+
+
+def _indicator_frames(db: Session, instrument: str) -> dict:
+    """Small indicator context for the validator (D + H4)."""
+    frames = {}
+    for tf, gran in (("D", "D"), ("H4", "4H")):
+        try:
+            df = load_candles_as_dataframe(db, instrument, gran)
+            if df is not None and len(df) >= 50:
+                frames[tf] = compute_indicators(df, tf)
+        except Exception as exc:
+            logger.warning("Orchestrator: indicators failed %s %s: %s", instrument, tf, exc)
+    return frames
+
+
 # ── Main pipeline ─────────────────────────────────────────────────────────────
 
 async def run_pipeline(db: Session) -> dict:
     """
-    Full 4-agent pipeline:
-      1. Screener — batch screen all 6 pairs (1 Haiku call)
-      2. Analyst — deep MTF analysis per flagged pair (1 Sonnet call each)
+    Engine-first pipeline:
+      1. Engine scan — mechanical 3-step strategy over all pairs (free)
+      2. Validator — one Claude call per candidate (usually 0-1 per run)
       3. Risk Manager — pure Python validation
       4. Orchestrator — persist Signal, handle execution mode, send email
-
-    Returns pipeline summary.
     """
     settings = get_settings()
     logger.info("=== Orchestrator: starting pipeline run (mode=%s) ===", settings.execution_mode)
@@ -204,45 +256,51 @@ async def run_pipeline(db: Session) -> dict:
         "errors": [],
     }
 
-    # ── Step 1: Screener ───────────────────────────────────────────────────────
-    try:
-        screener_result = await run_screener(db)
-    except Exception as exc:
-        logger.error("Orchestrator: Screener failed: %s", exc)
-        summary["errors"].append(f"Screener: {exc}")
+    # ── Step 1: Engine scan ────────────────────────────────────────────────────
+    candidates = scan_setups(db)
+    summary["pairs_screened"] = len(FOREX_PAIRS)
+    summary["pairs_flagged"] = len(candidates)
+
+    if not candidates:
+        logger.info("Orchestrator: engine found no setups — pipeline complete")
         return summary
 
-    summary["pairs_screened"] = screener_result.get("pairs_screened", 0)
-    flagged = screener_result.get("flagged", [])
-    summary["pairs_flagged"] = len(flagged)
-
-    if not flagged:
-        logger.info("Orchestrator: Screener found no setups — pipeline complete")
-        return summary
-
-    logger.info("Orchestrator: %d pair(s) flagged for deep analysis: %s",
-                len(flagged), [f["pair"] for f in flagged])
-
-    # ── Steps 2–4: Analyst + Risk Manager + persist + execute per flagged pair
-    for flagged_pair in flagged:
-        instrument = flagged_pair["pair"]
-        screener_direction = flagged_pair.get("direction", "")
-        screener_reason = flagged_pair.get("reason", "")
-
+    # ── Steps 2-4 per candidate ────────────────────────────────────────────────
+    for setup in candidates:
+        instrument = setup["instrument"]
         try:
-            # Step 2: Analyst
-            analyst_result = await run_analyst(
-                db=db,
-                instrument=instrument,
-                screener_reason=screener_reason,
-                screener_direction=screener_direction,
-            )
+            # Step 2: Claude validator (per validator_mode)
+            mode = settings.validator_mode
+            if mode == "off":
+                analyst_result = dict(setup)
+                analyst_result["confidence"] = 7
+                analyst_result["reasoning"] = "Mechanical mode: engine rules passed; validator disabled."
+            else:
+                try:
+                    analyst_result = await run_validator(
+                        db, setup, indicator_frames=_indicator_frames(db, instrument)
+                    )
+                    if not analyst_result.get("validator_approve"):
+                        logger.info("Orchestrator: validator vetoed %s (confidence %d)",
+                                    instrument, analyst_result.get("confidence", 0))
+                        summary["errors"].append(
+                            f"Validator ({instrument}): vetoed — {analyst_result.get('reasoning', '')[:200]}"
+                        )
+                        continue
+                except Exception as exc:
+                    if mode == "optional":
+                        logger.warning("Orchestrator: validator unavailable (%s), proceeding mechanically", exc)
+                        analyst_result = dict(setup)
+                        analyst_result["confidence"] = 7
+                        analyst_result["reasoning"] = f"Validator unavailable ({exc}); engine rules passed."
+                    else:
+                        # required: no validation = no trade
+                        logger.error("Orchestrator: validator failed for %s: %s", instrument, exc)
+                        summary["errors"].append(f"Validator ({instrument}): {exc}")
+                        continue
 
-            if not analyst_result.get("direction"):
-                logger.info("Orchestrator: Analyst found no valid setup for %s", instrument)
-                summary["errors"].append(f"Analyst ({instrument}): no setup above confidence threshold")
-                continue
-
+            analyst_result["screener_reason"] = setup["reason"]
+            analyst_result["session"] = _current_session()
             summary["signals_generated"] += 1
 
             # Step 3: Risk Manager
@@ -315,30 +373,63 @@ async def run_pipeline(db: Session) -> dict:
 
 async def run_single_pair(db: Session, instrument: str) -> dict:
     """
-    Run the analyst + risk pipeline for a single pair (manual trigger).
-    Skips the screener — goes directly to deep analysis.
+    Run the engine + validator + risk pipeline for a single pair (manual
+    trigger via the Analyze button).
     """
     settings = get_settings()
     logger.info("Orchestrator: manual analysis triggered for %s (mode=%s)", instrument, settings.execution_mode)
 
     try:
-        analyst_result = await run_analyst(
-            db=db,
-            instrument=instrument,
-            screener_reason="Manual trigger via API",
-            screener_direction="",
-        )
+        frames = _load_frames(db, instrument)
+        setup = evaluate_setup(frames, instrument)
     except Exception as exc:
-        logger.error("Orchestrator: Analyst failed for %s: %s", instrument, exc)
+        logger.error("Orchestrator: engine failed for %s: %s", instrument, exc)
         return {"status": "error", "instrument": instrument, "error": str(exc)}
 
-    if not analyst_result.get("direction"):
+    if setup is None:
         return {
             "status": "no_setup",
             "instrument": instrument,
-            "confidence": analyst_result.get("confidence", 0),
-            "reasoning": analyst_result.get("reasoning"),
+            "confidence": 0,
+            "reasoning": (
+                "No valid 3-step setup right now. All of the following must hold: "
+                "Weekly and Daily structure agree on direction; price is at a "
+                "support/resistance zone with 3+ touches inside the structure range; "
+                "the last closed 4H candle is a confirmation pattern in that direction; "
+                "and the nearest structure target gives at least 1:2 risk/reward."
+            ),
         }
+
+    mode = settings.validator_mode
+    if mode == "off":
+        analyst_result = dict(setup)
+        analyst_result["confidence"] = 7
+        analyst_result["reasoning"] = "Mechanical mode: engine rules passed; validator disabled."
+    else:
+        try:
+            analyst_result = await run_validator(
+                db, setup, indicator_frames=_indicator_frames(db, instrument)
+            )
+        except Exception as exc:
+            if mode == "optional":
+                analyst_result = dict(setup)
+                analyst_result["confidence"] = 7
+                analyst_result["reasoning"] = f"Validator unavailable ({exc}); engine rules passed."
+            else:
+                logger.error("Orchestrator: validator failed for %s: %s", instrument, exc)
+                return {"status": "error", "instrument": instrument,
+                        "error": f"Engine found a setup but the validator is unavailable: {exc}"}
+        if not analyst_result.get("validator_approve", True):
+            return {
+                "status": "no_setup",
+                "instrument": instrument,
+                "confidence": analyst_result.get("confidence", 0),
+                "reasoning": "Validator vetoed the engine candidate: "
+                             + str(analyst_result.get("reasoning", "")),
+            }
+
+    analyst_result["screener_reason"] = setup["reason"] + " (manual trigger)"
+    analyst_result["session"] = _current_session()
 
     try:
         risk_result = await run_risk_manager(db=db, analyst_result=analyst_result)
