@@ -6,7 +6,8 @@ __pycache__/
 *.sqlite3
 .DS_Store
 *.egg-info/
-dist/
+# dist/ is intentionally committed: the deployment Mac serves the prebuilt
+# frontend from the backend and needs no npm/node toolchain at all.
 build/
 .env
 .env

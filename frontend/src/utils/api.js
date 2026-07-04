@@ -1,4 +1,7 @@
-export const API_BASE = 'http://localhost:8000'
+// Dev (vite on :5173): talk to the backend at localhost:8000.
+// Production build (served BY the backend on :8000): relative URLs, so the
+// app works from any device on the network, not just localhost.
+export const API_BASE = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 export const ENDPOINTS = {
   // Account
