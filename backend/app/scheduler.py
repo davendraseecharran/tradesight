@@ -150,8 +150,10 @@ async def job_run_news_sentinel():
             "Scheduler: News Sentinel complete — %d events stored",
             result.get("events_stored", 0),
         )
+        record_success("news_sentinel", f"{result.get('events_stored', 0)} events stored")
     except Exception as exc:
         logger.error("Scheduler: News Sentinel job failed: %s", exc)
+        record_failure("news_sentinel", str(exc))
     finally:
         db.close()
 

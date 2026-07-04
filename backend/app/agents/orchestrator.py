@@ -16,6 +16,7 @@ from backend.app.models.signal import Signal
 from backend.app.services.historical import load_candles_as_dataframe
 from backend.app.services.indicators import compute_indicators
 from backend.app.services.strategy import evaluate_setup
+from backend.app.services.system_status import record_failure, record_success
 
 logger = logging.getLogger(__name__)
 
@@ -279,6 +280,8 @@ async def run_pipeline(db: Session) -> dict:
                     analyst_result = await run_validator(
                         db, setup, indicator_frames=_indicator_frames(db, instrument)
                     )
+                    # The API call worked — reset the failure counter
+                    record_success("validator", f"validated {instrument}")
                     if not analyst_result.get("validator_approve"):
                         logger.info("Orchestrator: validator vetoed %s (confidence %d)",
                                     instrument, analyst_result.get("confidence", 0))
@@ -287,6 +290,10 @@ async def run_pipeline(db: Session) -> dict:
                         )
                         continue
                 except Exception as exc:
+                    # A validator failure with a live candidate means a missed
+                    # trade — track it so repeated failures (e.g. unfunded API
+                    # key) trigger the alert email instead of failing silently.
+                    record_failure("validator", f"{instrument}: {exc}")
                     if mode == "optional":
                         logger.warning("Orchestrator: validator unavailable (%s), proceeding mechanically", exc)
                         analyst_result = dict(setup)
