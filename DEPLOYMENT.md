@@ -16,8 +16,10 @@ launchctl unload ~/Library/LaunchAgents/com.tradesight.watchdog.plist 2>/dev/nul
 git pull
 source .venv/bin/activate
 pip install -r backend/requirements.txt   # no new deps expected, but cheap
-cd frontend && npm install && cd ..
 ```
+The frontend now ships PREBUILT in the repo (`frontend/dist`) and is served
+by the backend itself on port 8000 — no npm, no node, no vite dev server on
+this Mac. (`npm install` is only needed for development on the other Mac.)
 
 ## 3. Update .env
 Keep your existing keys and add/change these lines:
@@ -68,8 +70,19 @@ sleep 5
 curl -s http://localhost:8000/health | python3 -m json.tool
 ```
 Expect: `"status": "ok"`, `"scheduler_running": true`, `"problems": []`.
-Open http://localhost:5173 — charts should render and the Dashboard should
-show a **Download Report** button (top right).
+
+Open **http://localhost:8000** — the full dashboard is served by the
+backend now (port 5173 is no longer used in deployment). Charts should
+render and the Dashboard should show a **Download Report** button.
+
+To monitor from another device on your network (phone, laptop):
+```bash
+ipconfig getifaddr en0    # prints this Mac's LAN IP, e.g. 192.168.1.42
+```
+Then browse to `http://<that-ip>:8000` from the other device. If it
+doesn't load remotely (but works on the Mac itself), allow incoming
+connections: System Settings → Network → Firewall → Options → allow
+`Python` (or turn the firewall off for the trusted home network).
 
 ## 7. Fund the API and confirm the validator
 Buy Anthropic API credits ($10-20 covers 2-3 months at the new call rate),

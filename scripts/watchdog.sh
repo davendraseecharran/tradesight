@@ -54,9 +54,12 @@ else
 fi
 [ "$backend_ok" = false ] && restart_service backend
 
-# ── Frontend: process alive is sufficient ────────────────────────────────────
-pidfile="/tmp/tradesight-frontend.pid"
-if ! { [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; }; then
-    log "frontend is down"
-    restart_service frontend
+# ── Frontend: only in dev mode. With a production build (frontend/dist),
+#    the backend serves the UI and there is no separate frontend process. ─────
+if [ ! -d "$DIR/frontend/dist" ]; then
+    pidfile="/tmp/tradesight-frontend.pid"
+    if ! { [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; }; then
+        log "frontend is down"
+        restart_service frontend
+    fi
 fi

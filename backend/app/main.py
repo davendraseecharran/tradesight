@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.app.database import init_db
 from backend.app.routers import analysis, backtest, market_data, risk
@@ -87,3 +90,35 @@ def health():
         "problems": snapshot["problems"],
         "jobs": snapshot["jobs"],
     }
+
+
+# ── Serve the built frontend (production) ─────────────────────────────────────
+# When frontend/dist exists (created by `npm run build`), the backend serves
+# the UI directly on port 8000. This removes the vite dev server from the
+# deployment entirely and makes the dashboard reachable from any device on
+# the network at http://<mac-ip>:8000.
+#
+# MUST be registered last: Starlette matches routes in registration order,
+# and this catch-all mount at "/" would otherwise swallow /health and any
+# route defined after it.
+
+class _SPAStaticFiles(StaticFiles):
+    """Static files with SPA fallback: unknown paths serve index.html so
+    React Router routes like /signals work on direct load/refresh."""
+
+    async def get_response(self, path: str, scope):
+        try:
+            response = await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise
+        if response.status_code == 404:
+            response = await super().get_response("index.html", scope)
+        return response
+
+
+_FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if _FRONTEND_DIST.is_dir():
+    app.mount("/", _SPAStaticFiles(directory=str(_FRONTEND_DIST), html=True), name="frontend")
+    logger.info("TradeSight: serving built frontend from %s", _FRONTEND_DIST)

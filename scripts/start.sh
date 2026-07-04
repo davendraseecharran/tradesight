@@ -22,20 +22,30 @@ nohup python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 \
 echo $! > /tmp/tradesight-backend.pid
 echo "  Backend PID: $(cat /tmp/tradesight-backend.pid)"
 
-# Start frontend
-echo "[2/2] Starting frontend (port 5173)..."
-cd "$DIR/frontend"
-nohup npm run dev -- --host 0.0.0.0 \
-    > /tmp/tradesight-frontend.log 2>&1 &
-echo $! > /tmp/tradesight-frontend.pid
-echo "  Frontend PID: $(cat /tmp/tradesight-frontend.pid)"
+# Start frontend — only needed in dev. When a production build exists
+# (frontend/dist, created by `npm run build`), the backend serves the UI
+# on port 8000 and no vite process is needed at all.
+if [ -d "$DIR/frontend/dist" ]; then
+    echo "[2/2] Frontend: production build found — served by backend on :8000"
+else
+    echo "[2/2] Starting frontend dev server (port 5173)..."
+    cd "$DIR/frontend"
+    nohup npm run dev -- --host 0.0.0.0 \
+        > /tmp/tradesight-frontend.log 2>&1 &
+    echo $! > /tmp/tradesight-frontend.pid
+    echo "  Frontend PID: $(cat /tmp/tradesight-frontend.pid)"
+fi
 
 cd "$DIR"
 
 echo ""
 echo "=== TradeSight Running ==="
-echo "  Backend:  http://localhost:8000"
-echo "  Frontend: http://localhost:5173"
+if [ -d "$DIR/frontend/dist" ]; then
+    echo "  Dashboard: http://localhost:8000  (also http://<this-mac-ip>:8000 from other devices)"
+else
+    echo "  Backend:  http://localhost:8000"
+    echo "  Frontend: http://localhost:5173"
+fi
 echo "  Health:   http://localhost:8000/health"
 echo ""
 echo "Logs:"
