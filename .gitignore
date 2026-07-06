@@ -16,3 +16,7 @@ __pycache__/
 node_modules/
 *.db
 system_status.json
+
+# SQLite WAL sidecar files (created by PRAGMA journal_mode=WAL)
+*.db-shm
+*.db-wal
