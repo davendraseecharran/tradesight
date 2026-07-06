@@ -233,7 +233,7 @@ async def execute_signal_trade(db: Session, signal_id: int) -> Trade:
     # Determine lots and units
     lots = signal.position_size or 0.01
     from backend.app.services.order_manager import lots_to_units
-    units = lots_to_units(lots)
+    units = lots_to_units(lots, signal.instrument)
     if signal.direction == "short":
         units = -units
 

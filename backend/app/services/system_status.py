@@ -28,15 +28,25 @@ def _now() -> str:
 
 
 def load_status() -> dict:
+    if not _STATUS_FILE.exists():
+        return {}
     try:
         return json.loads(_STATUS_FILE.read_text())
-    except Exception:
+    except Exception as exc:
+        # Corruption silently resetting failure counters would defeat the
+        # 3-strikes alert mechanism — make it loud.
+        logger.error("system_status: %s is corrupt (%s) — counters reset", _STATUS_FILE, exc)
         return {}
 
 
 def _save(status: dict) -> None:
+    """Atomic write (temp file + rename) so a crash mid-write can never
+    leave a truncated/corrupt JSON behind."""
     try:
-        _STATUS_FILE.write_text(json.dumps(status, indent=2, default=str))
+        import os
+        tmp = _STATUS_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(status, indent=2, default=str))
+        os.replace(tmp, _STATUS_FILE)
     except Exception as exc:
         logger.warning("system_status: save failed: %s", exc)
 

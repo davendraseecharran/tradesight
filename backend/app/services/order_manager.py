@@ -15,14 +15,23 @@ class OrderError(Exception):
     pass
 
 
-def lots_to_units(lots: float) -> int:
-    """Convert lots to OANDA units. 1 lot = 100,000 units."""
-    return int(round(lots * 100_000))
+def units_per_lot(instrument: str = "") -> int:
+    """OANDA units in one standard lot. Forex: 100,000 currency units.
+    Gold (XAU_USD): units are troy ounces and one lot is 100 oz — using the
+    forex figure here would size gold orders 1000x too large."""
+    if instrument.startswith("XAU"):
+        return 100
+    return 100_000
 
 
-def units_to_lots(units: float) -> float:
-    """Convert OANDA units to lots."""
-    return abs(units) / 100_000
+def lots_to_units(lots: float, instrument: str = "") -> int:
+    """Convert lots to OANDA units for the given instrument."""
+    return int(round(lots * units_per_lot(instrument)))
+
+
+def units_to_lots(units: float, instrument: str = "") -> float:
+    """Convert OANDA units to lots for the given instrument."""
+    return abs(units) / units_per_lot(instrument)
 
 
 class OrderManager:
@@ -133,7 +142,7 @@ class OrderManager:
             stop_loss: stop loss price
             take_profit: take profit price (use TP1)
         """
-        units = lots_to_units(lots)
+        units = lots_to_units(lots, instrument)
         if direction == "short":
             units = -units
 

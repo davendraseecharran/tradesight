@@ -103,9 +103,13 @@ def _send_email_alert(settings, signal: Signal, risk_result: dict, executed: boo
             smtp.login(settings.smtp_username, settings.smtp_password)
             smtp.sendmail(settings.smtp_username, settings.alert_email_to, msg.as_string())
         logger.info("Orchestrator: email alert sent for %s", signal.instrument)
+        record_success("email", f"trade alert for {signal.instrument}")
         return True
     except Exception as exc:
+        # Track SMTP breakage in /health — the failure-alert email obviously
+        # can't announce that email itself is broken.
         logger.error("Orchestrator: email send failed: %s", exc)
+        record_failure("email", str(exc))
         return False
 
 

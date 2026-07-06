@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     alert_email_to: str = ""
 
+    # Daily status email (heartbeat): one summary per day at 5:15 PM ET so
+    # silence is never ambiguous — no email at all means the app is down.
+    daily_status_email: bool = True
+
     # Execution mode
     execution_mode: str = "ALERT_ONLY"  # ALERT_ONLY | SEMI_AUTO | FULL_AUTO
 

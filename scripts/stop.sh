@@ -6,9 +6,14 @@ for svc in backend frontend; do
     pidfile="/tmp/tradesight-${svc}.pid"
     if [ -f "$pidfile" ]; then
         pid=$(cat "$pidfile")
-        if kill -0 "$pid" 2>/dev/null; then
+        # Verify the PID is actually ours before killing — PIDs get recycled
+        # by the OS, and blindly killing a stale one hits innocent processes.
+        cmd=$(ps -p "$pid" -o command= 2>/dev/null)
+        if echo "$cmd" | grep -qE "uvicorn backend.app.main|vite|npm"; then
             kill "$pid"
             echo "  Stopped $svc (PID $pid)"
+        elif [ -n "$cmd" ]; then
+            echo "  $svc PID $pid was recycled by another process — not killing it"
         else
             echo "  $svc was not running (stale PID $pid)"
         fi

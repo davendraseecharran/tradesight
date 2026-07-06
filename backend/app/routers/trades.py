@@ -37,7 +37,7 @@ async def execute_manual_trade(req: ManualTradeRequest, db: Session = Depends(ge
     except Exception as exc:
         raise HTTPException(502, f"OANDA account error: {exc}")
 
-    units = lots_to_units(req.lots)
+    units = lots_to_units(req.lots, instrument)
     if req.direction == "short":
         units = -units
 

@@ -158,6 +158,40 @@ async def job_run_news_sentinel():
         db.close()
 
 
+async def job_daily_status():
+    """Daily heartbeat email — 5:15 PM ET. Absence of this email = app down."""
+    import smtplib
+    from email.mime.text import MIMEText
+
+    from backend.app.config import get_settings
+    from backend.app.services.diagnostics import build_daily_status
+
+    settings = get_settings()
+    if not settings.daily_status_email or not settings.smtp_username or not settings.alert_email_to:
+        return
+
+    db = SessionLocal()
+    try:
+        body = build_daily_status(db)
+    finally:
+        db.close()
+
+    msg = MIMEText(body)
+    msg["Subject"] = "[TradeSight] Daily Status — alive"
+    msg["From"] = settings.smtp_username
+    msg["To"] = settings.alert_email_to
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
+            smtp.starttls()
+            smtp.login(settings.smtp_username, settings.smtp_password)
+            smtp.sendmail(settings.smtp_username, settings.alert_email_to, msg.as_string())
+        logger.info("Scheduler: daily status email sent")
+        record_success("daily_status", "sent")
+    except Exception as exc:
+        logger.error("Scheduler: daily status email failed: %s", exc)
+        record_failure("daily_status", str(exc))
+
+
 async def job_manage_trades():
     """Trade lifecycle manager — runs every 5 minutes during market hours."""
     if not is_market_open():
@@ -173,8 +207,12 @@ async def job_manage_trades():
             result["checked"], result["breakeven_applied"],
             result["trailing_applied"], result["partial_closes"], result["closed"],
         )
+        record_success("trade_lifecycle", f"checked {result['checked']} trades")
     except Exception as exc:
+        # A silent failure here means protective stops stop advancing on
+        # open positions — must be visible in /health and the daily email.
         logger.error("Scheduler: trade lifecycle job failed: %s", exc)
+        record_failure("trade_lifecycle", str(exc))
     finally:
         db.close()
 
@@ -196,14 +234,18 @@ def create_scheduler() -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=pytz.utc)
 
     # Engine + validator pipeline every 4 hours, 5 minutes AFTER the OANDA
-    # H4 candles close (candles are aligned to 17:00 New York = 21:00/22:00
-    # UTC, so closes land at 1,5,9,13,17,21 UTC). The strategy enters on
-    # confirmation-candle CLOSE, so running mid-candle would be pointless.
+    # H4 candles close. OANDA candles are anchored to 17:00 NEW YORK LOCAL
+    # time, so H4 closes land at 1,5,9,13,17,21 in **ET**, year-round.
+    # Scheduling in ET (like the news jobs) makes APScheduler+pytz absorb
+    # the DST shift; hardcoded UTC hours would run mid-candle for the four
+    # EST months every winter. The strategy enters on confirmation-candle
+    # CLOSE, so mid-candle runs silently degrade every signal.
     scheduler.add_job(
         job_run_pipeline,
         trigger="cron",
         hour="1,5,9,13,17,21",
         minute=5,
+        timezone=ET,
         id="pipeline",
         name="Engine + Validator Pipeline",
         replace_existing=True,
@@ -256,6 +298,19 @@ def create_scheduler() -> AsyncIOScheduler:
         name="Trade Lifecycle Manager",
         replace_existing=True,
         misfire_grace_time=60,
+    )
+
+    # Daily heartbeat email at 5:15 PM ET — its absence means the app is down
+    scheduler.add_job(
+        job_daily_status,
+        trigger="cron",
+        hour=17,
+        minute=15,
+        timezone=ET,
+        id="daily_status",
+        name="Daily Status Email",
+        replace_existing=True,
+        misfire_grace_time=3600,
     )
 
     return scheduler

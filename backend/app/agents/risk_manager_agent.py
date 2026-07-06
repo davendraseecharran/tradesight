@@ -18,20 +18,25 @@ logger = logging.getLogger(__name__)
 # Works equally for the $100K practice account (paper trading) and a $1K
 # real account when we go live. Min 0.01 lots (OANDA minimum); max scales as
 # 0.0001 × balance, capped at 5 lots absolute.
+# Lot size is instrument-aware: 1 forex lot = 100,000 currency units, but
+# 1 gold lot = 100 troy oz (see order_manager.units_per_lot). Using the
+# forex figure for XAU_USD floored every gold position up to 1,000 oz —
+# ~25x the intended risk.
 LOT_MIN = 0.01
 LOT_MAX_ABSOLUTE = 5.0          # never exceed 5 standard lots on a single trade
-UNITS_PER_LOT = 100_000
 
 
-def _units_to_lots(raw_units: float, balance: float) -> float:
+def _units_to_lots(raw_units: float, balance: float, instrument: str = "") -> float:
     """Convert raw position units to lot size, scaled to account balance.
 
-    Examples:
+    Examples (forex):
       balance=$1,000   → max 0.10 lots
       balance=$10,000  → max 1.00 lots
       balance=$100,000 → max 5.00 lots (absolute cap)
     """
-    lots = raw_units / UNITS_PER_LOT
+    from backend.app.services.order_manager import units_per_lot
+
+    lots = raw_units / units_per_lot(instrument)
     # Per-account max: 0.0001 × balance, but never below 0.05 (so even tiny
     # accounts can take a position) and never above LOT_MAX_ABSOLUTE.
     dynamic_max = max(0.05, min(balance * 0.0001, LOT_MAX_ABSOLUTE))
@@ -70,9 +75,11 @@ async def run_risk_manager(
     # ── 1. Fetch live account balance ──────────────────────────────────────────
     account_balance = 500.0  # safe fallback
     try:
-        oanda = OandaClient(settings)
-        summary = await oanda.get_account_summary()
-        await oanda.close()
+        # async with guarantees the httpx client closes even when the request
+        # raises — otherwise every transient OANDA failure leaks a connection
+        # pool in this weeks-long process.
+        async with OandaClient(settings) as oanda:
+            summary = await oanda.get_account_summary()
         account_balance = float(summary.get("balance", 500.0))
         logger.info("Risk Manager: live OANDA balance $%.2f", account_balance)
     except Exception as exc:
@@ -108,9 +115,24 @@ async def run_risk_manager(
         )
 
     # ── 4. Clamp position size (scales with account balance) ──────────────────
+    from backend.app.services.order_manager import units_per_lot
+
     raw_units = validation["position_size"]
-    clamped_lots = _units_to_lots(raw_units, account_balance)
+    clamped_lots = _units_to_lots(raw_units, account_balance, instrument)
     risk_amount = round(account_balance * settings.max_risk_per_trade, 2)
+
+    # Hard guard: after clamping/flooring, recompute the ACTUAL dollar risk
+    # of the position that would be placed. If the minimum tradable size
+    # implies more than 1.5x the intended risk budget (possible on small
+    # accounts or high-priced instruments like gold), reject the trade —
+    # never let a rounding floor silently oversize risk.
+    actual_units = clamped_lots * units_per_lot(instrument)
+    actual_risk = actual_units * abs(entry - stop_loss)
+    if actual_risk > risk_amount * 1.5:
+        rejection_reasons.append(
+            f"Minimum position size risks ${actual_risk:,.0f}, "
+            f"exceeding the ${risk_amount:,.0f} budget (x1.5 tolerance)"
+        )
 
     approved = len(rejection_reasons) == 0
 

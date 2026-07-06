@@ -46,6 +46,27 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Remote devices on the LAN may VIEW everything but change nothing: any
+# non-GET request must originate from this machine. This closes off the
+# unauthenticated attack surface (placing OANDA orders, flipping execution
+# mode, rewriting .env via the settings endpoint) that binding 0.0.0.0
+# would otherwise expose to every device — or compromised webpage — on the
+# home network. Full control stays available in the dashboard opened on
+# the Mac itself.
+@app.middleware("http")
+async def _localhost_only_mutations(request, call_next):
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        client_host = request.client.host if request.client else ""
+        if client_host not in ("127.0.0.1", "::1", "localhost"):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "State-changing requests are only allowed from the "
+                                   "trading Mac itself. Remote devices are view-only."},
+            )
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*", "http://localhost:5173", "http://localhost:3000"],

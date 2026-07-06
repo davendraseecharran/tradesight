@@ -26,10 +26,91 @@ BACKEND_LOG = Path("/tmp/tradesight-backend.log")
 WATCHDOG_LOG = Path("/tmp/tradesight-watchdog.log")
 
 
+def build_daily_status(db: Session) -> str:
+    """Plain-text daily heartbeat email body: last 24h of activity + health.
+
+    Sent every day so the user can distinguish 'no setups found' (email
+    arrives, says so) from 'app is down' (no email at all).
+    """
+    from backend.app.models.api_call import ApiCall as _ApiCall  # local alias
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=24)
+
+    signals = db.query(Signal).filter(Signal.created_at >= cutoff).all()
+    trades = db.query(Trade).filter(Trade.created_at >= cutoff).all()
+    open_trades = db.query(Trade).filter(Trade.status.in_(["open", "partial_close"])).all()
+    ai_calls = db.query(_ApiCall).filter(_ApiCall.timestamp >= cutoff).all()
+    ai_cost = sum((c.cost_usd or 0) for c in ai_calls)
+
+    snapshot = health_snapshot()
+    jobs = snapshot.get("jobs", {})
+
+    def _job_line(name: str, label: str) -> str:
+        j = jobs.get(name)
+        if not j:
+            return f"  {label}: no runs recorded yet"
+        age = j.get("last_success_age_hours")
+        fails = j.get("consecutive_failures", 0)
+        age_str = f"last success {age}h ago" if age is not None else "no success recorded"
+        fail_str = f", {fails} consecutive failures" if fails else ""
+        return f"  {label}: {age_str}{fail_str}"
+
+    lines = [
+        f"TradeSight Daily Status — {now.strftime('%Y-%m-%d %H:%M UTC')}",
+        "",
+        "If you're reading this, the app is alive. No daily email = app is down.",
+        "",
+        f"System health: {'OK' if snapshot['ok'] else 'DEGRADED'}",
+    ]
+    for p in snapshot.get("problems", []):
+        lines.append(f"  PROBLEM: {p}")
+    lines += [
+        _job_line("pipeline", "Pipeline (4h scans)"),
+        _job_line("candle_refresh", "Candle refresh (hourly)"),
+        _job_line("trade_lifecycle", "Trade lifecycle (5min)"),
+        _job_line("validator", "AI validator"),
+        _job_line("news_sentinel", "News sentinel"),
+        _job_line("email", "Email delivery"),
+        "",
+        "Last 24 hours:",
+        f"  Setups found by engine: {len(signals)}",
+    ]
+    for s in signals:
+        verdict = "risk-approved" if s.risk_approved else "rejected"
+        lines.append(
+            f"    - {s.instrument} {s.direction} conf={s.confidence} → {verdict}"
+            f" ({s.status}/{s.execution_status or 'no exec'})"
+        )
+    lines += [
+        f"  Trades opened: {len(trades)}",
+        f"  Open positions now: {len(open_trades)}",
+    ]
+    for t in open_trades:
+        lines.append(
+            f"    - {t.instrument} {t.direction} @ {t.entry_price}"
+            f" (SL {t.stop_loss}, TP {t.take_profit})"
+        )
+    lines += [
+        f"  AI cost: ${ai_cost:.4f} ({len(ai_calls)} calls)",
+        "",
+        "Zero setups is normal for this strategy (1-2 trades/month on average).",
+        "Dashboard: http://localhost:8000  |  Weekly review: click Download Report.",
+    ]
+    return "\n".join(lines)
+
+
 def _log_tail(path: Path, interesting_only: bool = True, max_lines: int = 300) -> list[str]:
-    """Last error/warning lines from a log file (or plain tail)."""
+    """Last error/warning lines from a log file (bounded read: only the final
+    512KB, so a weeks-old unrotated log can't blow up report generation)."""
     try:
-        lines = path.read_text(errors="ignore").splitlines()
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - 512 * 1024))
+            lines = f.read().decode(errors="ignore").splitlines()
+            if size > 512 * 1024 and lines:
+                lines = lines[1:]  # drop the partial first line
     except Exception:
         return []
     if interesting_only:

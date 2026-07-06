@@ -39,18 +39,21 @@ restart_service() {
     log "$svc restarted (PID $(cat $pidfile))"
 }
 
-# ── Backend: process must be alive AND /health must answer ──────────────────
+# ── Backend: someone must own port 8000 AND /health must answer ─────────────
+# Port ownership is the source of truth (PID files die with /tmp on reboot
+# and PIDs get recycled); adopt whatever live uvicorn owns the port.
 backend_ok=false
 pidfile="/tmp/tradesight-backend.pid"
-if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-    # Alive — but is it responsive? A hung event loop passes kill -0.
+port_owner=$(lsof -ti :8000 2>/dev/null | head -1)
+if [ -n "$port_owner" ]; then
+    echo "$port_owner" > "$pidfile"
     if curl -sf -m 10 http://localhost:8000/health > /dev/null 2>&1; then
         backend_ok=true
     else
-        log "backend PID alive but /health unresponsive — restarting"
+        log "backend on port 8000 (PID $port_owner) but /health unresponsive — restarting"
     fi
 else
-    log "backend is down"
+    log "backend is down (nothing on port 8000)"
 fi
 [ "$backend_ok" = false ] && restart_service backend
 
