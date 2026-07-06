@@ -16,10 +16,11 @@ export default function Layout() {
   const { data: schedule } = useApi(ENDPOINTS.signalSchedule, { interval: 60000 })
 
   const marketOpen = schedule?.is_open ?? false
-  const oandaOk = health?.status === 'ok'
-  // Claude is considered "ok" if the backend is running (health responds)
-  // It's truly testable only when a pipeline runs, but this is the best proxy
-  const claudeOk = health?.status === 'ok'
+  // Per-connection status from /health. Fall back to overall status for
+  // older backends that don't report connections yet.
+  const oandaOk = health?.connections?.oanda ?? (health?.status === 'ok')
+  const claudeOk = health?.connections?.claude ?? (health?.status === 'ok')
+  const problems = health?.problems ?? []
 
   return (
     <div className="flex h-screen overflow-hidden bg-bg-primary">
@@ -53,6 +54,17 @@ export default function Layout() {
 
             {/* Separator */}
             <span className="w-px h-3 bg-bg-border" />
+
+            {/* System health (hover for details) */}
+            {problems.length > 0 && (
+              <span
+                className="flex items-center gap-1.5 text-amber-500 cursor-help"
+                title={problems.join('\n')}
+              >
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                <span>{problems.length} ISSUE{problems.length > 1 ? 'S' : ''}</span>
+              </span>
+            )}
 
             {/* OANDA status */}
             <span className="flex items-center gap-1.5">

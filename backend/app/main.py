@@ -30,6 +30,22 @@ async def lifespan(app: FastAPI):
     _scheduler.start()
     logger.info("TradeSight: scheduler started (%d jobs)", len(_scheduler.get_jobs()))
 
+    # Refresh candles immediately on startup instead of waiting up to an
+    # hour for the interval job. After downtime this heals data staleness
+    # within seconds and proves OANDA connectivity right away (the result
+    # is recorded to system_status, which drives the dashboard chips).
+    import asyncio
+
+    from backend.app.scheduler import job_refresh_candles
+
+    async def _startup_refresh():
+        try:
+            await job_refresh_candles()
+        except Exception as exc:
+            logger.error("TradeSight: startup candle refresh failed: %s", exc)
+
+    asyncio.get_event_loop().create_task(_startup_refresh())
+
     print("TradeSight: database initialized, scheduler started, server ready")
     yield
 
@@ -98,18 +114,38 @@ app.include_router(report_export.router)
 
 @app.get("/health")
 def health():
+    from backend.app.config import get_settings
     from backend.app.scheduler import get_market_status
     from backend.app.services.system_status import health_snapshot
     market = get_market_status()
     snapshot = health_snapshot()
+    jobs = snapshot["jobs"]
+    settings = get_settings()
+
+    def _job_ok(name: str) -> bool:
+        # A job that has never run yet is not evidence of a broken
+        # connection — only recorded consecutive failures are.
+        return jobs.get(name, {}).get("consecutive_failures", 0) == 0
+
+    # Per-connection status for the dashboard chips. Overall "degraded"
+    # (e.g. stale candles right after a restart) must NOT paint the
+    # OANDA/Claude connections as down — that conflation previously showed
+    # both as offline whenever anything at all was unhealthy.
+    connections = {
+        "oanda": _job_ok("candle_refresh"),
+        "claude": bool(settings.anthropic_api_key)
+                  and _job_ok("validator") and _job_ok("news_sentinel"),
+    }
+
     return {
         "status": "ok" if snapshot["ok"] else "degraded",
-        "version": "0.6.0",
+        "version": "0.6.1",
         "market_open": market["is_open"],
         "market_time_et": market["current_time_et"],
         "scheduler_running": _scheduler.running if _scheduler else False,
+        "connections": connections,
         "problems": snapshot["problems"],
-        "jobs": snapshot["jobs"],
+        "jobs": jobs,
     }
 
 

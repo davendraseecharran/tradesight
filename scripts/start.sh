@@ -14,6 +14,15 @@ elif [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
 fi
 
+# Self-healing layer: if the watchdog + keep-awake LaunchAgents aren't
+# loaded, install them now. Without this the app stays dead after any
+# crash or reboot until a human notices — the exact failure we keep
+# seeing when this manual step is skipped.
+if ! launchctl list 2>/dev/null | grep -q com.tradesight.watchdog; then
+    echo "[0/2] Watchdog not loaded — installing self-healing LaunchAgents..."
+    bash "$DIR/scripts/install_watchdog.sh" || echo "  WARNING: watchdog install failed — app will NOT auto-restart"
+fi
+
 # Start backend (no --reload: dev-mode file watching is unstable for a
 # long-running production server). Refuse to double-start: after a reboot
 # the watchdog may already own port 8000 — spawning a second uvicorn would
