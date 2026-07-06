@@ -205,6 +205,60 @@ def _load_frames(db: Session, instrument: str) -> dict:
     return frames
 
 
+def explain_pair_gates(db: Session) -> list[str]:
+    """One line per pair: structure trends + which gate the engine is waiting
+    on. Used by the daily heartbeat email so the user can see the engine
+    thinking even on zero-trade days."""
+    from backend.app.services.strategy.aoi import find_aois, nearest_aoi
+    from backend.app.services.strategy import patterns as pat
+    from backend.app.services.strategy.engine import DEFAULTS, _cached_structure
+
+    lines = []
+    k = DEFAULTS["swing_k"]
+    for pair in FOREX_PAIRS:
+        try:
+            frames = _load_frames(db, pair)
+            if len(frames) < 3:
+                lines.append(f"{pair}: missing data ({sorted(frames.keys())})")
+                continue
+            w = _cached_structure(frames["W"], k, None)
+            d = _cached_structure(frames["D"], k, None)
+            h4 = _cached_structure(frames["H4"], k, None, cache=False)
+            trends = f"W:{(w.trend or '?')[:4]} D:{(d.trend or '?')[:4]} 4H:{(h4.trend or '?')[:4]}"
+
+            if w.trend is None or d.trend is None:
+                status = "insufficient structure data"
+            elif w.trend != d.trend:
+                status = "standing aside — Weekly/Daily disagree"
+            else:
+                aois = find_aois(frames["H4"], h4)
+                if not aois:
+                    status = f"{w.trend} bias — no valid 3-touch zone in range yet"
+                else:
+                    last = frames["H4"].iloc[-1]
+                    zone = nearest_aoi(aois, float(last["close"]))
+                    if not zone.candle_at_or_inside(float(last["high"]), float(last["low"])):
+                        side = "down to" if float(last["close"]) > zone.mid else "up to"
+                        status = (f"{w.trend} bias — waiting for price to come {side} "
+                                  f"zone {zone.bottom:.5f}-{zone.top:.5f}")
+                    else:
+                        direction = w.trend
+                        idx = len(frames["H4"]) - 1
+                        conf = (pat.bullish_confirmation(frames["H4"], idx)
+                                if direction == "bullish"
+                                else pat.bearish_confirmation(frames["H4"], idx))
+                        if conf is None:
+                            status = (f"{w.trend} bias — AT ZONE, waiting for a "
+                                      f"{'bullish' if direction == 'bullish' else 'bearish'} "
+                                      f"confirmation candle")
+                        else:
+                            status = f"{w.trend} bias — confirmation formed, checking R:R / risk gates"
+            lines.append(f"{pair:8} [{trends}] {status}")
+        except Exception as exc:
+            lines.append(f"{pair}: gate check failed ({exc})")
+    return lines
+
+
 def scan_setups(db: Session) -> list[dict]:
     """Run the mechanical 3-step engine over all pairs. Free, deterministic."""
     candidates = []

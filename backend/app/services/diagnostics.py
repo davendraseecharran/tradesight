@@ -94,7 +94,19 @@ def build_daily_status(db: Session) -> str:
     lines += [
         f"  AI cost: ${ai_cost:.4f} ({len(ai_calls)} calls)",
         "",
-        "Zero setups is normal for this strategy (1-2 trades/month on average).",
+        "Engine snapshot (what each market is doing / waiting for):",
+    ]
+    try:
+        # Lazy import avoids a circular dependency at module load time
+        from backend.app.agents.orchestrator import explain_pair_gates
+        for line in explain_pair_gates(db):
+            lines.append(f"  {line}")
+    except Exception as exc:
+        lines.append(f"  (snapshot unavailable: {exc})")
+    lines += [
+        "",
+        "Zero setups is normal — the 48-month backtest averaged ~1 trade every 6-8 weeks",
+        "across all markets. Quiet weeks are the strategy working, not failing.",
         "Dashboard: http://localhost:8000  |  Weekly review: click Download Report.",
     ]
     return "\n".join(lines)
