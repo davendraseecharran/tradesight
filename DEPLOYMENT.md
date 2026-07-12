@@ -1,5 +1,19 @@
 # TradeSight — Deployment MacBook Reload Guide
 
+## Updating an existing install (the usual case)
+
+One command does everything — stop, pull, deps, reinstall LaunchAgents,
+restart, verify:
+```bash
+cd ~/tradesight && ./scripts/update.sh
+```
+It ends with `UPDATE PASSED` and a health summary, or `UPDATE FAILED`
+plus the relevant log lines. Nothing else to remember.
+
+---
+
+## First-time install
+
 Follow these steps in order on the deployment MacBook. Total time: ~15 min.
 Do NOT fund the Anthropic API until step 6 verifies everything else.
 

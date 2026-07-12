@@ -5,6 +5,12 @@
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LOG="/tmp/tradesight-watchdog.log"
 
+# launchd's PATH may not include /usr/sbin, where lsof lives. Resolving it
+# by absolute path matters: an unfound lsof made the port check return
+# empty, so the watchdog "restarted" a perfectly healthy backend every
+# 5 minutes until one of the restarts left it dead.
+LSOF="$(command -v lsof || echo /usr/sbin/lsof)"
+
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S'): $1" >> "$LOG"; }
 
 restart_service() {
@@ -39,21 +45,25 @@ restart_service() {
     log "$svc restarted (PID $(cat $pidfile))"
 }
 
-# ── Backend: someone must own port 8000 AND /health must answer ─────────────
-# Port ownership is the source of truth (PID files die with /tmp on reboot
-# and PIDs get recycled); adopt whatever live uvicorn owns the port.
+# ── Backend: /health answering is the PRIMARY liveness signal ───────────────
+# Rule: the watchdog must NEVER restart a backend whose /health responds,
+# no matter what any other check claims. Port/PID detection can fail (e.g.
+# a missing tool in launchd's PATH); a live health endpoint cannot lie.
 backend_ok=false
 pidfile="/tmp/tradesight-backend.pid"
-port_owner=$(lsof -ti :8000 2>/dev/null | head -1)
-if [ -n "$port_owner" ]; then
-    echo "$port_owner" > "$pidfile"
-    if curl -sf -m 10 http://localhost:8000/health > /dev/null 2>&1; then
-        backend_ok=true
-    else
-        log "backend on port 8000 (PID $port_owner) but /health unresponsive — restarting"
-    fi
+if curl -sf -m 10 http://localhost:8000/health > /dev/null 2>&1; then
+    backend_ok=true
+    # Keep the PID file in sync with whoever actually owns the port
+    port_owner=$("$LSOF" -ti :8000 2>/dev/null | head -1)
+    [ -n "$port_owner" ] && echo "$port_owner" > "$pidfile"
 else
-    log "backend is down (nothing on port 8000)"
+    port_owner=$("$LSOF" -ti :8000 2>/dev/null | head -1)
+    if [ -n "$port_owner" ]; then
+        log "backend on port 8000 (PID $port_owner) but /health unresponsive — restarting"
+        echo "$port_owner" > "$pidfile"
+    else
+        log "backend is down (no /health, nothing on port 8000)"
+    fi
 fi
 [ "$backend_ok" = false ] && restart_service backend
 

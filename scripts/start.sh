@@ -28,7 +28,8 @@ fi
 # the watchdog may already own port 8000 — spawning a second uvicorn would
 # overwrite the PID file with a dead process and send the watchdog into a
 # kill/restart flap.
-existing=$(lsof -ti :8000 2>/dev/null | head -1)
+LSOF="$(command -v lsof || echo /usr/sbin/lsof)"
+existing=$("$LSOF" -ti :8000 2>/dev/null | head -1)
 if [ -n "$existing" ]; then
     echo "[1/2] Backend already running on port 8000 (PID $existing) — not starting a second one."
     echo "$existing" > /tmp/tradesight-backend.pid

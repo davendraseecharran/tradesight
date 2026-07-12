@@ -17,12 +17,16 @@ router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 # Keys that are sensitive and should be masked in GET responses
 _SENSITIVE_KEYS = {"OANDA_API_TOKEN", "ANTHROPIC_API_KEY", "SMTP_PASSWORD", "BINANCE_API_SECRET"}
 
-# Keys that can be updated via the API
+# Keys that can be updated via the API (writes are localhost-only via the
+# mutation middleware in main.py — remote devices cannot change these)
 _UPDATABLE_KEYS = {
-    "OANDA_API_TOKEN", "OANDA_ACCOUNT_ID",
+    "OANDA_API_TOKEN", "OANDA_ACCOUNT_ID", "OANDA_API_URL",
     "ANTHROPIC_API_KEY",
     "ALERT_EMAIL_TO", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_HOST", "SMTP_PORT",
-    "EXECUTION_MODE",
+    "EXECUTION_MODE", "VALIDATOR_MODE",
+    "MAX_RISK_PER_TRADE", "DAILY_LOSS_LIMIT", "MAX_OPEN_POSITIONS",
+    "MIN_RISK_REWARD_RATIO", "ANALYST_MIN_CONFIDENCE",
+    "DAILY_STATUS_EMAIL",
 }
 
 
