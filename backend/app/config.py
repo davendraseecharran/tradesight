@@ -52,6 +52,12 @@ class Settings(BaseSettings):
     # silence is never ambiguous — no email at all means the app is down.
     daily_status_email: bool = True
 
+    # Dead-man's switch: a healthchecks.io ping URL. The watchdog pings it
+    # every 5 minutes while the backend is healthy; if pings stop (backend
+    # dead, Mac asleep, power/network out), healthchecks.io sends a push
+    # notification within minutes. Empty = disabled.
+    healthcheck_ping_url: str = ""
+
     # Execution mode
     execution_mode: str = "ALERT_ONLY"  # ALERT_ONLY | SEMI_AUTO | FULL_AUTO
 

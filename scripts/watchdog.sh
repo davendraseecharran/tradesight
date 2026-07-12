@@ -67,6 +67,17 @@ else
 fi
 [ "$backend_ok" = false ] && restart_service backend
 
+# ── Dead-man's switch: ping healthchecks.io while healthy ────────────────────
+# Pings flow only when the backend is confirmed alive. If the Mac sleeps,
+# powers off, loses network, or the backend stays dead, pings stop and
+# healthchecks.io pushes an alert to the user's phone within minutes.
+if [ "$backend_ok" = true ]; then
+    PING_URL=$(grep -E '^HEALTHCHECK_PING_URL=' "$DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d ' ')
+    if [ -n "$PING_URL" ]; then
+        curl -sf -m 10 "$PING_URL" > /dev/null 2>&1 || log "healthchecks ping failed"
+    fi
+fi
+
 # ── Frontend: only in dev mode. With a production build (frontend/dist),
 #    the backend serves the UI and there is no separate frontend process. ─────
 if [ ! -d "$DIR/frontend/dist" ]; then

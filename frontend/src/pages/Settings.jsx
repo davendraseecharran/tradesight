@@ -221,6 +221,20 @@ export default function Settings() {
             <ConfigField label="SMTP Port" value={getVal('SMTP_PORT')} onChange={v => setVal('SMTP_PORT', v)} />
           </div>
           <ConfigField label="SMTP Password (app password)" value={getVal('SMTP_PASSWORD')} onChange={v => setVal('SMTP_PASSWORD', v)} type="password" />
+          <div>
+            <ConfigField
+              label="Dead-man's switch ping URL (healthchecks.io)"
+              value={getVal('HEALTHCHECK_PING_URL')}
+              onChange={v => setVal('HEALTHCHECK_PING_URL', v)}
+              placeholder="https://hc-ping.com/xxxxxxxx-xxxx-..."
+            />
+            <p className="text-xs text-text-muted mt-1">
+              Optional but recommended: create a free check at healthchecks.io (period 10 min,
+              grace 5 min), paste its ping URL here, and connect the healthchecks.io app or
+              ntfy for push alerts. Your phone gets notified within minutes if this Mac ever
+              goes silent — no ports exposed.
+            </p>
+          </div>
           <div className="flex items-center gap-3">
             <button onClick={handleTestEmail} disabled={emailSending}
               className="px-4 py-2 text-sm rounded-md border border-bg-border text-text-secondary hover:bg-bg-hover transition disabled:opacity-50">
